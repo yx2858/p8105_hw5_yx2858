@@ -1,0 +1,45 @@
+---
+title: "p8105_hw5_yx2858"
+author: "Yueyi Xu"
+date: "2023-11-12"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(p8105.datasets)
+set.seed(1)
+```
+
+# Problem 1
+
+```{r}
+raw_data = read_csv("homicide-data.csv")
+```
+
+There are `r nrow(raw_data)` rows and `r ncol(raw_data)` columns in the dataset of homicide.
+
+```{r}
+homicide = raw_data |>
+  mutate(city_state = str_c(city, state, sep = ', '))
+```
+
+```{r}
+homicide |>
+  group_by(city) |>
+  summarize(count = n()) |>
+  knitr::kable(caption = "Total number of homicides")
+```
+
+```{r}
+homicide |>
+  group_by(city) |>
+  summarize(total_homicides = n(),
+            unsolved_homicides = sum(disposition == "Closed without arrest") +
+                                       sum(disposition == "Open/No arrest")) |>
+  arrange(desc(total_homicides)) |>
+  knitr::kable(caption = "Total number of unsolved homicides")
+```
+
+From the table, Chicago has the highest number of homicides of 5535 and highest number of unsolved homicidies of 4073. 
+
