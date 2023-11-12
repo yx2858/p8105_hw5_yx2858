@@ -80,7 +80,7 @@ full_df =
 ```
 
 
-### Iterate over file names and read in data for each subject
+### Iterate over file names and read in data for each subject, tidy the result; manipulate file names to include control arm and subject ID
 
 ```{r}
 tidy_df =
@@ -101,5 +101,22 @@ tidy_df =
 ```
 
 
+### Spaghetti plot
+
+```{r}
+tidy_df |>
+  ggplot(aes(x = week, y = observations, color = id)) +
+  geom_line() +
+  facet_grid(. ~ arm) +
+  labs(
+    title = "Observations on each subject over time",
+    x = "week",
+    y = "observaions",
+    caption = "data from p8105_hw5_yx2858.data"
+  )
+```
+
+Comment on the plots:
+In the control group, participant's observations generally stay between -2.5 to 5.0 and fluctuate from weeks to weeks with no specific pattern. However, in the experiment group, participant's observations increase from week 1 to week 8, indicating a linear trend since week 1.
 
 
