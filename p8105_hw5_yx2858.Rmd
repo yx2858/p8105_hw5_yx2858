@@ -13,6 +13,8 @@ set.seed(1)
 
 # Problem 1
 
+### Describe the raw data
+
 ```{r}
 raw_data = read_csv("homicide-data.csv")
 ```
@@ -33,7 +35,7 @@ homicide |>
 
 ```{r}
 homicide |>
-  group_by(city) |>
+  group_by(city_state) |>
   summarize(total_homicides = n(),
             unsolved_homicides = sum(disposition == "Closed without arrest") +
                                        sum(disposition == "Open/No arrest")) |>
@@ -41,5 +43,26 @@ homicide |>
   knitr::kable(caption = "Total number of unsolved homicides")
 ```
 
-From the table, Chicago has the highest number of homicides of 5535 and highest number of unsolved homicidies of 4073. 
+From the table, Chicago has the highest number of homicides of 5535 and highest number of unsolved homicides of 4073. Tulsa, AL has the lowest number of homicides of 1 and lowest number of unsolved homicides of 0.
+
+
+### Proportion test
+
+```{r}
+baltimore = homicide |>
+  filter(city_state == "Baltimore, MD") |>
+  mutate(unsolved_homicides = ifelse(disposition == "Open/No arrest" | disposition == "Closed without arrest", 1, 0))
+```
+
+```{r}
+result_baltimore = 
+  prop.test(sum(baltimore$unsolved_homicides), length(baltimore$unsolved_homicides)) |>
+  broom::tidy()
+result_baltimore
+
+save(result_baltimore, file = "result/result_baltimore.RData")
+```
+
+The proportion test on Baltimore estimates that `r result_baltimore$estimate` of the homicides are unsolved, and 95% confidence interval for the proportion estimate is `r result_baltimore$conf.low` to `r result_baltimore$conf.high`.
+
 
