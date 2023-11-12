@@ -46,7 +46,7 @@ homicide |>
 From the table, Chicago has the highest number of homicides of 5535 and highest number of unsolved homicides of 4073. Tulsa, AL has the lowest number of homicides of 1 and lowest number of unsolved homicides of 0.
 
 
-### Proportion test
+### Proportion test in Baltimore
 
 ```{r}
 baltimore = homicide |>
@@ -64,5 +64,42 @@ save(result_baltimore, file = "result/result_baltimore.RData")
 ```
 
 The proportion test on Baltimore estimates that `r result_baltimore$estimate` of the homicides are unsolved, and 95% confidence interval for the proportion estimate is `r result_baltimore$conf.low` to `r result_baltimore$conf.high`.
+
+
+
+# Problem 2
+
+### Start with a dataframe containing all file names
+
+```{r}
+full_df = 
+  tibble(
+    files = list.files("data")
+  ) |>
+  mutate(files = str_c("data", files, sep = "/"))
+```
+
+
+### Iterate over file names and read in data for each subject
+
+```{r}
+tidy_df =
+  full_df |>
+  mutate(
+    participant = map(files, read_csv),
+    arm = case_when(str_detect(files, "exp") ~ "experiment",
+                    str_detect(files, "con") ~ "control"),
+    id = as.factor(parse_number(files))
+  ) |>
+  unnest(participant) |>
+  pivot_longer(
+    week_1:week_8,
+    names_to = "week",
+    values_to = "observations",
+    names_prefix = "week_") |>
+  mutate(week = as.numeric(week))
+```
+
+
 
 
