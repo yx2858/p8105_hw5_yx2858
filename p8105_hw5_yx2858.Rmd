@@ -73,31 +73,32 @@ The proportion test on Baltimore estimates that `r result_baltimore$estimate` of
 
 ```{r}
 full_df = 
-  tibble(
-    files = list.files("data")
-  ) |>
-  mutate(files = str_c("data", files, sep = "/"))
+  tibble( #create a tibble with a column named files, containing the full file paths of the files in the "data" directory
+    files = list.files("data", full.names = TRUE)
+  )|>
+  mutate(data = map(files, read.csv)) #add a new column "data" using the map function, for each file in the files column, the read.csv function is applied, which reads the CSV file and stores the result in the data column
 ```
 
 
 ### Iterate over file names and read in data for each subject, tidy the result; manipulate file names to include control arm and subject ID
 
-```{r}
+```{r, message=FALSE}
 tidy_df =
   full_df |>
   mutate(
-    participant = map(files, read_csv),
-    arm = case_when(str_detect(files, "exp") ~ "experiment",
-                    str_detect(files, "con") ~ "control"),
-    id = as.factor(parse_number(files))
+    participant = map(files, read_csv),  #add a new column named participant by applying read_csv to each file in the files column which assumes that the files are in csv format
+    arm = case_when(str_detect(files, "exp") ~ "experiment", #add a new column named arm and categorize exp and con according to experiment and control
+                    str_detect(files, "con") ~ "control"), 
+    id = as.factor(parse_number(files)) #add a new column named id and extract number from the files and convert it
   ) |>
-  unnest(participant) |>
-  pivot_longer(
+  unnest(participant) |> #unnest the participant column
+  pivot_longer( #reshape the data to horizontal view, changing columns from week 1 to week 8 to week and observations
     week_1:week_8,
     names_to = "week",
     values_to = "observations",
     names_prefix = "week_") |>
-  mutate(week = as.numeric(week))
+  mutate(week = as.numeric(week)) |> #convert week to numeric
+  select(arm, id, week, observations) #select the specific columns to generate the finalized tidy_df
 ```
 
 
@@ -105,18 +106,112 @@ tidy_df =
 
 ```{r}
 tidy_df |>
-  ggplot(aes(x = week, y = observations, color = id)) +
-  geom_line() +
-  facet_grid(. ~ arm) +
-  labs(
+  ggplot(aes(x = week, y = observations, group = id, color = id)) + #set up the ggplot and specify x axis as week and y axis as observations
+  geom_line() + #add line
+  facet_grid(. ~ arm) + #create two panels based on the arm category
+  labs( #set the plot's title, x axis label, y axis label, and caption
     title = "Observations on each subject over time",
     x = "week",
     y = "observaions",
     caption = "data from p8105_hw5_yx2858.data"
-  )
+  ) +
+  theme_minimal()
 ```
 
 Comment on the plots:
 In the control group, participant's observations generally stay between -2.5 to 5.0 and fluctuate from weeks to weeks with no specific pattern. However, in the experiment group, participant's observations increase from week 1 to week 8, indicating a linear trend since week 1.
+
+
+# Problem 3
+
+### Define the function of t test
+
+```{r}
+sim_norm =
+  function(n=30, mu, sd=5){
+    x = rnorm(n, mean=mu, sd) #generate random sample from normal distribution
+    test_result = t.test(x) |> #perform a t test
+      broom::tidy() |>
+      select(estimate, p.value) #select the estimate and p.value
+  }
+```
+
+### Set $\mu$=0 and generate 5000 data
+
+```{r}
+sim_mu0 = rerun(5000, sim_norm(mu=0)) |> #run 5000 cases of normal distribution with mu=0
+  bind_rows() #combine into a single dataframe
+```
+
+### Repeat for $\mu$ = {1, 2, 3, 4, 5, 6}
+
+```{r}
+sim_mu123456 = 
+  tibble( #create a tibble with a column named mu with values 1 to 6
+    mu = c(1, 2, 3, 4, 5, 6)
+  ) |>
+  mutate(outputs = map(.x = mu, ~ rerun(5000, sim_norm(n=30, mu = .x, sd=5))), #for each mu, simulate 5000 cases of normal distributions
+         result = map(outputs, bind_rows)) |> #add the column named result which contain all the outputs of all the values
+  unnest(result) |> #unnest the result column
+  select(-outputs) #remove the outputs column
+```
+
+### Make a plot showing the proportion of times the null was rejected (the power of the test) on the y axis and the true value of $\mu$ on the x axis
+
+```{r}
+sim_mu123456 |>
+  group_by(mu) |> #group the data by the true value of mu
+  summarize(p_value = sum(p.value < 0.05), #calculate the total number of times the null was rejected
+            n = n(),
+            prop_reject = p_value / n) |>
+  ggplot(aes(x = mu, y = prop_reject)) + #set up the ggplot and specify x axis with true value of mu and y axis as proportion of rejection
+  geom_point() + #add points to plot
+  geom_smooth() + #add a smooth line to plot
+  labs( #set the plot's title, x axis label, and y axis label
+    title = "Proportion of times the null was rejected",
+    x = "true value of mu",
+    y = "power of the test"
+  )
+```
+
+Comment on the plot:
+The proportion of times the null was rejected increases as mu increases from 1 to 6. Therefore, there is a positive linear correlation between the power of the test and the true value of $\mu$. The power of the test increases as the size increases and approaches 1 ultimately.
+
+### Make a plot showing the the average estimate of $\hat{\mu}$ on the y axis and the true value of $\mu$ on the x axis
+
+```{r}
+sim_mu123456 |>
+  group_by(mu) |> #group the data by the true value of mu
+  summarize(avg = mean(estimate, na.rm = TRUE)) |> #calculate the average estimate of mu for each true value of mu
+  ggplot(aes(x = mu, y = avg)) + #set up the ggplot and specify x axis with true value of mu and y axis as average estimate of mu
+  geom_point() + #add points to the plot
+  geom_smooth() + #add a smooth line to the plot
+  labs( #set the plot's title, x axis label, and y axis label
+    title = "Average estimate of mu and true value of mu",
+    x = "true value of mu",
+    y = "average estimate of mu"
+  )
+```
+
+### Make a second plot (or overlay on the first) the average estimate of $\hat{\mu}$ only in samples for which the null was rejected on the y axis and the true value of $\mu$ on the x axis
+
+```{r}
+sim_mu123456 |>
+  group_by(mu) |> #group the data by the true value of mean
+  filter(p.value < 0.05) |> #filter the data to include only cases where the null hypothesis was rejected (p.value < 0.05)
+  summarize(avg = mean(estimate, na.rm = TRUE)) |> #calculate the average estimate of mu for each true value of mu
+  ggplot(aes(x = mu, y = avg)) + #set up the ggplot and specify x axis with true value of mu and y axis as average estimate of mu
+  geom_point() + #add points to the plot
+  geom_smooth() + #add a smooth line to the plot
+  labs( #set the plot's title, x axis label, and y axis label
+    title = "Average estimate of mu and true value of mu in samples of rejecting null",
+    x = "true value of mu",
+    y = "average estimate of mu"
+  )
+```
+
+Comment on the above plot:
+The sample average of $\hat{\mu}$ across tests for which the null is rejected is approximately equal to the true value of $\mu$. When the true value of $\mu$ is below 4, the average estimate of $\hat{\mu}$ is slightly higher than the true value of $\mu$. This is due to the smaller the effect size and the lower the power of the test. When the true value of $\mu$ is equal and larger than 4, the average estimate of $\hat{\mu}$ is approximately equal to the true value of $\mu$. In this case, the larger the effect size and the higher the power of the test.
+
 
 
